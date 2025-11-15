@@ -25,7 +25,7 @@ type NewInfo struct {
 
 var New = discordgo.ApplicationCommand{
 	Name:        "start",
-	Description: "Start a new game",
+	Description: "オートミュートを開始します",
 }
 
 func NewResponse(status NewStatus, info NewInfo, sett *settings.GuildSettings) *discordgo.InteractionResponse {
