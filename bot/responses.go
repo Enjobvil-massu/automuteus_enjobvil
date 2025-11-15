@@ -2,22 +2,20 @@ package bot
 
 import (
 	"fmt"
-	"github.com/automuteus/automuteus/v8/pkg/amongus"
-	"github.com/automuteus/automuteus/v8/pkg/discord"
-	"github.com/automuteus/automuteus/v8/pkg/settings"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/automuteus/automuteus/v8/bot/setting"
+	"github.com/automuteus/automuteus/v8/pkg/amongus"
+	"github.com/automuteus/automuteus/v8/pkg/discord"
 	"github.com/automuteus/automuteus/v8/pkg/game"
+	"github.com/automuteus/automuteus/v8/pkg/settings"
 	"github.com/bwmarrin/discordgo"
 	"github.com/nicksnyder/go-i18n/v2/i18n"
 )
 
 const ISO8601 = "2006-01-02T15:04:05-0700"
 
-func settingResponse(settings []setting.Setting, sett *settings.GuildSettings, prem bool) *discordgo.MessageEmbed {
+func settingResponse(settingsList []setting.Setting, sett *settings.GuildSettings, prem bool) *discordgo.MessageEmbed {
 	embed := discordgo.MessageEmbed{
 		URL:  "",
 		Type: "",
@@ -39,7 +37,7 @@ func settingResponse(settings []setting.Setting, sett *settings.GuildSettings, p
 	}
 
 	fields := make([]*discordgo.MessageEmbedField, 0)
-	for _, v := range settings {
+	for _, v := range settingsList {
 		if !v.Premium {
 			name := v.Name
 			fields = append(fields, &discordgo.MessageEmbedField{
@@ -71,7 +69,7 @@ func settingResponse(settings []setting.Setting, sett *settings.GuildSettings, p
 		Value:  desc,
 		Inline: false,
 	})
-	for _, v := range settings {
+	for _, v := range settingsList {
 		if v.Premium {
 			name := v.Name
 			fields = append(fields, &discordgo.MessageEmbedField{
@@ -86,8 +84,10 @@ func settingResponse(settings []setting.Setting, sett *settings.GuildSettings, p
 	return &embed
 }
 
+// ===== ステータス埋め込み本体 =====
+
 func (bot *Bot) gameStateResponse(dgs *GameState, sett *settings.GuildSettings) *discordgo.MessageEmbed {
-	// we need to generate the messages based on the state of the game
+	// ゲームの状態に応じてメッセージを切り替え
 	messages := map[game.Phase]func(dgs *GameState, emojis AlivenessEmojis, sett *settings.GuildSettings) *discordgo.MessageEmbed{
 		game.MENU:     menuMessage,
 		game.LOBBY:    lobbyMessage,
@@ -98,24 +98,22 @@ func (bot *Bot) gameStateResponse(dgs *GameState, sett *settings.GuildSettings) 
 	return messages[dgs.GameData.Phase](dgs, bot.StatusEmojis, sett)
 }
 
-func lobbyMetaEmbedFields(room, region string, author, voiceChannelID string, playerCount int, linkedPlayers int, sett *settings.GuildSettings) []*discordgo.MessageEmbedField {
+// --- 上部のメタ情報（ホスト・VC・リンク人数） ---
+// room / region はもう使わないので _ で捨てています。
+// ラベルは日本語固定にしています。
+func lobbyMetaEmbedFields(_ string, _ string, author, voiceChannelID string, playerCount int, linkedPlayers int, _ *settings.GuildSettings) []*discordgo.MessageEmbedField {
 	gameInfoFields := make([]*discordgo.MessageEmbedField, 0)
+
 	if author != "" {
 		gameInfoFields = append(gameInfoFields, &discordgo.MessageEmbedField{
-			Name: sett.LocalizeMessage(&i18n.Message{
-				ID:    "responses.lobbyMetaEmbedFields.Host",
-				Other: "Host",
-			}),
+			Name:   "ホスト",
 			Value:  discord.MentionByUserID(author),
 			Inline: true,
 		})
 	}
 	if voiceChannelID != "" {
 		gameInfoFields = append(gameInfoFields, &discordgo.MessageEmbedField{
-			Name: sett.LocalizeMessage(&i18n.Message{
-				ID:    "responses.lobbyMetaEmbedFields.VoiceChannel",
-				Other: "Voice Channel",
-			}),
+			Name:   "ボイスチャンネル",
 			Value:  discord.MentionByChannelID(voiceChannelID),
 			Inline: true,
 		})
@@ -124,42 +122,15 @@ func lobbyMetaEmbedFields(room, region string, author, voiceChannelID string, pl
 		linkedPlayers = playerCount
 	}
 	gameInfoFields = append(gameInfoFields, &discordgo.MessageEmbedField{
-		Name: sett.LocalizeMessage(&i18n.Message{
-			ID:    "responses.lobbyMetaEmbedFields.PlayersLinked",
-			Other: "Players Linked",
-		}),
+		Name:   "リンク済みメンバー",
 		Value:  fmt.Sprintf("%v/%v", linkedPlayers, playerCount),
 		Inline: true,
 	})
-	if room != "" {
-		switch {
-		case sett.DisplayRoomCode == "spoiler":
-			room = fmt.Sprintf("||%v||", room)
-		case sett.DisplayRoomCode == "never":
-			room = strings.Repeat("\\*", len(room))
-		}
-		gameInfoFields = append(gameInfoFields, &discordgo.MessageEmbedField{
-			Name: sett.LocalizeMessage(&i18n.Message{
-				ID:    "responses.lobbyMetaEmbedFields.RoomCode",
-				Other: "🔒 ROOM CODE",
-			}),
-			Value:  room,
-			Inline: false,
-		})
-	}
-	if region != "" {
-		gameInfoFields = append(gameInfoFields, &discordgo.MessageEmbedField{
-			Name: sett.LocalizeMessage(&i18n.Message{
-				ID:    "responses.lobbyMetaEmbedFields.Region",
-				Other: "🌎 REGION",
-			}),
-			Value:  region,
-			Inline: false,
-		})
-	}
 
 	return gameInfoFields
 }
+
+// ===== メニュー画面 =====
 
 func menuMessage(dgs *GameState, _ AlivenessEmojis, sett *settings.GuildSettings) *discordgo.MessageEmbed {
 	var footer *discordgo.MessageEmbedFooter
@@ -169,7 +140,7 @@ func menuMessage(dgs *GameState, _ AlivenessEmojis, sett *settings.GuildSettings
 		footer = &discordgo.MessageEmbedFooter{
 			Text: sett.LocalizeMessage(&i18n.Message{
 				ID:    "responses.menuMessage.Linked.FooterText",
-				Other: "(Enter a game lobby in Among Us to start the match)",
+				Other: "Among Us でロビーに入ると試合が開始されます。",
 			}),
 			IconURL:      "",
 			ProxyIconURL: "",
@@ -180,20 +151,14 @@ func menuMessage(dgs *GameState, _ AlivenessEmojis, sett *settings.GuildSettings
 	author := dgs.GameStateMsg.LeaderID
 	if author != "" {
 		fields = append(fields, &discordgo.MessageEmbedField{
-			Name: sett.LocalizeMessage(&i18n.Message{
-				ID:    "responses.lobbyMetaEmbedFields.Host",
-				Other: "Host",
-			}),
-			Value:  discord.MentionByUserID(author),
+			Name: "ホスト",
+			Value: discord.MentionByUserID(author),
 			Inline: true,
 		})
 	}
 	if dgs.VoiceChannel != "" {
 		fields = append(fields, &discordgo.MessageEmbedField{
-			Name: sett.LocalizeMessage(&i18n.Message{
-				ID:    "responses.lobbyMetaEmbedFields.VoiceChannel",
-				Other: "Voice Channel",
-			}),
+			Name:   "ボイスチャンネル",
 			Value:  "<#" + dgs.VoiceChannel + ">",
 			Inline: true,
 		})
@@ -211,14 +176,14 @@ func menuMessage(dgs *GameState, _ AlivenessEmojis, sett *settings.GuildSettings
 		Type: "",
 		Title: sett.LocalizeMessage(&i18n.Message{
 			ID:    "responses.menuMessage.Title",
-			Other: "Main Menu",
+			Other: "メインメニュー",
 		}),
 		Description: desc,
 		Timestamp:   time.Now().Format(ISO8601),
 		Footer:      footer,
 		Color:       color,
 		Image:       nil,
-		Thumbnail:   nil,
+		Thumbnail:   nil, // 地図は表示しない
 		Video:       nil,
 		Provider:    nil,
 		Author:      nil,
@@ -227,9 +192,20 @@ func menuMessage(dgs *GameState, _ AlivenessEmojis, sett *settings.GuildSettings
 	return &msg
 }
 
+// ===== ロビー画面 =====
+
 func lobbyMessage(dgs *GameState, emojis AlivenessEmojis, sett *settings.GuildSettings) *discordgo.MessageEmbed {
-	room, region, playMap := dgs.GameData.GetRoomRegionMap()
-	gameInfoFields := lobbyMetaEmbedFields(room, region, dgs.GameStateMsg.LeaderID, dgs.VoiceChannel, dgs.GameData.GetNumDetectedPlayers(), dgs.GetCountLinked(), sett)
+	// room, region だけ取得してラベル部分に渡す（中身は使わない）
+	room, region, _ := dgs.GameData.GetRoomRegionMap()
+	gameInfoFields := lobbyMetaEmbedFields(
+		room,
+		region,
+		dgs.GameStateMsg.LeaderID,
+		dgs.VoiceChannel,
+		dgs.GameData.GetNumDetectedPlayers(),
+		dgs.GetCountLinked(),
+		sett,
+	)
 
 	listResp := dgs.ToEmojiEmbedFields(emojis, sett)
 	listResp = append(gameInfoFields, listResp...)
@@ -244,24 +220,21 @@ func lobbyMessage(dgs *GameState, emojis AlivenessEmojis, sett *settings.GuildSe
 		Type: "",
 		Title: sett.LocalizeMessage(&i18n.Message{
 			ID:    "responses.lobbyMessage.Title",
-			Other: "Lobby",
+			Other: "ロビー",
 		}),
 		Description: desc,
 		Timestamp:   time.Now().Format(ISO8601),
 		Footer: &discordgo.MessageEmbedFooter{
 			Text: sett.LocalizeMessage(&i18n.Message{
-				ID:    "responses.lobbyMessage.Footer.Text",
-				Other: "Use the select below with your in-game color! (or {{.X}} to leave)",
-			},
-				map[string]interface{}{
-					"X": X,
-				}),
+				ID: "responses.lobbyMessage.Footer.Text",
+				Other: "下の色ボタンからアモアスの色を選んでください。（× で解除）",
+			}),
 			IconURL:      "",
 			ProxyIconURL: "",
 		},
 		Color:     color,
 		Image:     nil,
-		Thumbnail: getThumbnailFromMap(playMap, sett),
+		Thumbnail: nil, // ★ 地図サムネイル削除
 		Video:     nil,
 		Provider:  nil,
 		Author:    nil,
@@ -270,14 +243,16 @@ func lobbyMessage(dgs *GameState, emojis AlivenessEmojis, sett *settings.GuildSe
 	return &msg
 }
 
+// ===== ゲーム終了画面 =====
+
 func gameOverMessage(dgs *GameState, emojis AlivenessEmojis, sett *settings.GuildSettings, winners string) *discordgo.MessageEmbed {
-	_, _, playMap := dgs.GameData.GetRoomRegionMap()
+	_, _, _ = dgs.GameData.GetRoomRegionMap()
 
 	listResp := dgs.ToEmojiEmbedFields(emojis, sett)
 
 	desc := sett.LocalizeMessage(&i18n.Message{
 		ID:    "eventHandler.gameOver.matchID",
-		Other: "Game Over! View the match's stats using Match ID: `{{.MatchID}}`\n{{.Winners}}",
+		Other: "ゲーム終了！ この試合の統計情報は Match ID: `{{.MatchID}}` から確認できます。\n{{.Winners}}",
 	},
 		map[string]interface{}{
 			"MatchID": matchIDCode(dgs.ConnectCode, dgs.MatchID),
@@ -290,7 +265,7 @@ func gameOverMessage(dgs *GameState, emojis AlivenessEmojis, sett *settings.Guil
 		footer = &discordgo.MessageEmbedFooter{
 			Text: sett.LocalizeMessage(&i18n.Message{
 				ID:    "eventHandler.gameOver.deleteMessageFooter",
-				Other: "Deleting message {{.Mins}} mins from:",
+				Other: "このメッセージは {{.Mins}} 分後に削除されます。",
 			},
 				map[string]interface{}{
 					"Mins": sett.DeleteGameSummaryMinutes,
@@ -303,13 +278,13 @@ func gameOverMessage(dgs *GameState, emojis AlivenessEmojis, sett *settings.Guil
 	msg := discordgo.MessageEmbed{
 		URL:         "",
 		Type:        "",
-		Title:       sett.LocalizeMessage(amongus.ToLocale(game.GAMEOVER)),
+		Title:       "ゲーム終了",
 		Description: desc,
 		Timestamp:   time.Now().Format(ISO8601),
 		Footer:      footer,
-		Color:       discord.DARK_GOLD, // DARK GOLD
+		Color:       discord.DARK_GOLD,
 		Image:       nil,
-		Thumbnail:   getThumbnailFromMap(playMap, sett),
+		Thumbnail:   nil, // ★ 地図サムネイル削除
 		Video:       nil,
 		Provider:    nil,
 		Author:      nil,
@@ -318,24 +293,24 @@ func gameOverMessage(dgs *GameState, emojis AlivenessEmojis, sett *settings.Guil
 	return &msg
 }
 
-func getThumbnailFromMap(playMap game.PlayMap, sett *settings.GuildSettings) *discordgo.MessageEmbedThumbnail {
-	url := game.FormMapUrl(os.Getenv("BASE_MAP_URL"), playMap, sett.MapVersion == "detailed")
-	if url != "" {
-		return &discordgo.MessageEmbedThumbnail{
-			URL: url,
-		}
-	}
-	return nil
-}
+// ===== プレイ中（タスク / 会議） =====
 
 func gamePlayMessage(dgs *GameState, emojis AlivenessEmojis, sett *settings.GuildSettings) *discordgo.MessageEmbed {
 	phase := dgs.GameData.GetPhase()
-	playMap := dgs.GameData.GetPlayMap()
-	// send empty fields because we don't need to display those fields during the game...
+	_ = dgs.GameData.GetPlayMap()
+
 	listResp := dgs.ToEmojiEmbedFields(emojis, sett)
 
-	gameInfoFields := lobbyMetaEmbedFields("", "", dgs.GameStateMsg.LeaderID, dgs.VoiceChannel, dgs.GameData.GetNumDetectedPlayers(), dgs.GetCountLinked(), sett)
+	gameInfoFields := lobbyMetaEmbedFields(
+		"", "",
+		dgs.GameStateMsg.LeaderID,
+		dgs.VoiceChannel,
+		dgs.GameData.GetNumDetectedPlayers(),
+		dgs.GetCountLinked(),
+		sett,
+	)
 	listResp = append(gameInfoFields, listResp...)
+
 	desc, color := dgs.descriptionAndColor(sett)
 	if color == discord.DEFAULT {
 		switch phase {
@@ -345,7 +320,20 @@ func gamePlayMessage(dgs *GameState, emojis AlivenessEmojis, sett *settings.Guil
 			color = discord.PURPLE
 		}
 	}
-	title := sett.LocalizeMessage(amongus.ToLocale(phase))
+
+	// タイトルを日本語にする
+	var title string
+	switch phase {
+	case game.TASKS:
+		title = "タスク中"
+	case game.DISCUSS:
+		title = "会議中"
+	case game.GAMEOVER:
+		title = "ゲーム終了"
+	default:
+		// 念のため、既存のローカライズもフォールバックで残しておく
+		title = sett.LocalizeMessage(amongus.ToLocale(phase))
+	}
 
 	msg := discordgo.MessageEmbed{
 		URL:         "",
@@ -356,7 +344,7 @@ func gamePlayMessage(dgs *GameState, emojis AlivenessEmojis, sett *settings.Guil
 		Color:       color,
 		Footer:      nil,
 		Image:       nil,
-		Thumbnail:   getThumbnailFromMap(playMap, sett),
+		Thumbnail:   nil, // ★ 地図サムネイル削除
 		Video:       nil,
 		Provider:    nil,
 		Author:      nil,
@@ -366,6 +354,8 @@ func gamePlayMessage(dgs *GameState, emojis AlivenessEmojis, sett *settings.Guil
 	return &msg
 }
 
+// ===== 汎用メッセージ =====
+
 // returns the description and color to use, based on the gamestate
 // usage dictates DEFAULT should be overwritten by other state subsequently,
 // whereas RED and DARK_ORANGE are error/flag values that should be passed on
@@ -373,21 +363,20 @@ func (dgs *GameState) descriptionAndColor(sett *settings.GuildSettings) (string,
 	if !dgs.Linked {
 		return sett.LocalizeMessage(&i18n.Message{
 			ID:    "responses.notLinked.Description",
-			Other: "❌**No capture linked! Click the link above to connect!**❌",
-		}), discord.RED // red
+			Other: "❌ **キャプチャがリンクされていません！ 上のリンクから接続してください。** ❌",
+		}), discord.RED
 	} else if !dgs.Running {
 		return sett.LocalizeMessage(&i18n.Message{
 			ID:    "responses.makeDescription.GameNotRunning",
-			Other: "\n⚠ **Bot is Paused!** ⚠\n\n",
+			Other: "\n⚠ **Bot は一時停止中です** ⚠\n\n",
 		}), discord.DARK_ORANGE
 	}
 	return "\n", discord.DEFAULT
-
 }
 
 func nonPremiumSettingResponse(sett *settings.GuildSettings) string {
 	return sett.LocalizeMessage(&i18n.Message{
 		ID:    "responses.nonPremiumSetting.Desc",
-		Other: "Sorry, but that setting is reserved for AutoMuteUs Premium users! See `/premium` for details",
+		Other: "申し訳ありませんが、その設定は AutoMuteUs Premium 専用です。詳細は `/premium` を確認してください。",
 	})
 }
