@@ -24,7 +24,7 @@ type NewInfo struct {
 }
 
 var New = discordgo.ApplicationCommand{
-	Name:        "new",
+	Name:        "start",
 	Description: "Start a new game",
 }
 
