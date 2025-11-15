@@ -5,6 +5,6 @@ import (
 )
 
 var End = discordgo.ApplicationCommand{
-	Name:        "end",
+	Name:        "stop",
 	Description: "End a game",
 }
