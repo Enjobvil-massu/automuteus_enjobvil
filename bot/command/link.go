@@ -18,7 +18,7 @@ const (
 
 var Link = discordgo.ApplicationCommand{
 	Name:        "link",
-	Description: "Link a Discord User to their in-game color",
+	Description: "ディスコード名とアモアス名に手動リンクします",
 	Options: []*discordgo.ApplicationCommandOption{
 		{
 			Type:        discordgo.ApplicationCommandOptionUser,
