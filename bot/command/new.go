@@ -47,11 +47,10 @@ func NewResponse(status NewStatus, info NewInfo, sett *settings.GuildSettings) *
 		// ① :443 を消す（https のデフォルトポートなので見た目だけ削る）
 		host = strings.TrimSuffix(host, ":443")
 
-		// ② もし wss 表記にしたくなったら、これを有効化すればOK
-		//    （今は https のまま）
+		// ② もし wss 表記にしたくなったら、これを有効化すればOK（今は https のまま）
 		// host = strings.Replace(host, "https://", "wss://", 1)
 
-		// 追記したい注意メッセージ
+		// コードの下に出したい注意文
 		note := "接続後、AmongUsCapture がフリーズする場合があります。\nその場合はキャプチャを再起動し、再度【登録】ボタンを押してください。"
 
 		embeds = []*discordgo.MessageEmbed{
@@ -61,8 +60,7 @@ func NewResponse(status NewStatus, info NewInfo, sett *settings.GuildSettings) *
 					"AmongUsCapture の🔌設定画面で、下記の値を入力してください。\n\n"+
 						"・**Host** → 下の「ホスト」をコピペ\n"+
 						"・**Code** → 下の「コード」をコピペ\n\n"+
-						"※ キャプチャ本体のダウンロードは <%s> から行えます。\n\n"+
-						"%s",
+						"※ キャプチャ本体のダウンロードは <%s> から行えます。",
 					CaptureDownloadURL,
 				),
 				Color: 0x00cc88,
@@ -73,11 +71,11 @@ func NewResponse(status NewStatus, info NewInfo, sett *settings.GuildSettings) *
 						Inline: false,
 					},
 					{
-						Name:   "コード",
-						Value:  fmt.Sprintf("```%s```", info.ConnectCode),
-						Inline: true,
+						Name: "コード",
+						// コードのすぐ下に注意文を表示
+						Value: fmt.Sprintf("```%s```\n%s", info.ConnectCode, note),
+						Inline: false,
 					},
-					note,
 				},
 			},
 		}
