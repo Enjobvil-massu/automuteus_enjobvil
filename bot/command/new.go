@@ -2,6 +2,7 @@ package command
 
 import (
 	"fmt"
+	"strings" // ★ 追加
 
 	"github.com/automuteus/automuteus/v8/pkg/settings"
 	"github.com/bwmarrin/discordgo"
@@ -33,14 +34,22 @@ var New = discordgo.ApplicationCommand{
 func NewResponse(status NewStatus, info NewInfo, sett *settings.GuildSettings) *discordgo.InteractionResponse {
 	var content string
 	var embeds []*discordgo.MessageEmbed
-	// デフォルトは「自分だけ見える」メッセージ
-	flags := discordgo.MessageFlagsEphemeral
+	flags := discordgo.MessageFlagsEphemeral // デフォルトは自分だけ
 
 	switch status {
 	case NewSuccess:
-		// ===== /start 成功時の見た目 =====
-		// AmongUsCapture の Host / Code を日本語で表示
-		content = "" // 本文テキストは使わず Embed だけにする
+		// ===== /start 成功時 =====
+		content = ""
+
+		// ---- ホストの見た目を整える ----
+		host := info.MinimalURL
+
+		// ① :443 を消す（https のデフォルトポートなので見た目だけ削る）
+		host = strings.TrimSuffix(host, ":443")
+
+		// ② もし wss 表記にしたくなったら、これを有効化すればOK
+		//    （今は https のまま）
+		// host = strings.Replace(host, "https://", "wss://", 1)
 
 		embeds = []*discordgo.MessageEmbed{
 			{
@@ -56,7 +65,7 @@ func NewResponse(status NewStatus, info NewInfo, sett *settings.GuildSettings) *
 				Fields: []*discordgo.MessageEmbedField{
 					{
 						Name:  "ホスト",
-						Value: fmt.Sprintf("```%s```", info.MinimalURL),
+						Value: fmt.Sprintf("```%s```", host),
 						Inline: false,
 					},
 					{
@@ -69,14 +78,12 @@ func NewResponse(status NewStatus, info NewInfo, sett *settings.GuildSettings) *
 		}
 
 	case NewNoVoiceChannel:
-		// VC 入ってないときのエラーは既存のまま（必要なら後で日本語化でもOK）
 		content = sett.LocalizeMessage(&i18n.Message{
 			ID:    "commands.new.nochannel",
 			Other: "Please join a voice channel before starting a match!",
 		})
 
 	case NewLockout:
-		// ロックアウト警告は元のまま（公開メッセージ）
 		content = sett.LocalizeMessage(&i18n.Message{
 			ID: "commands.new.lockout",
 			Other: "If I start any more games, Discord will lock me out, or throttle the games I'm running! 😦\n" +
@@ -85,7 +92,7 @@ func NewResponse(status NewStatus, info NewInfo, sett *settings.GuildSettings) *
 		}, map[string]interface{}{
 			"Games": fmt.Sprintf("%d/%d", info.ActiveGames, DefaultMaxActiveGames),
 		})
-		flags = discordgo.MessageFlags(0) // これはみんなに見せる
+		flags = discordgo.MessageFlags(0) // 公開メッセージ
 	}
 
 	return &discordgo.InteractionResponse{
