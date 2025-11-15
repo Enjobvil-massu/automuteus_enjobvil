@@ -55,7 +55,7 @@ func NewResponse(status NewStatus, info NewInfo, sett *settings.GuildSettings) *
 			{
 				Title: "🍰 AmongUsCapture を接続してください",
 				Description: fmt.Sprintf(
-					"AmongUsCapture の設定画面で、下記の値を入力してください。\n\n"+
+					"AmongUsCapture の🔌設定画面で、下記の値を入力してください。\n\n"+
 						"・**Host** → 下の「ホスト」をコピペ\n"+
 						"・**Code** → 下の「コード」をコピペ\n\n"+
 						"※ キャプチャ本体のダウンロードは <%s> から行えます。",
@@ -73,6 +73,9 @@ func NewResponse(status NewStatus, info NewInfo, sett *settings.GuildSettings) *
 						Value:  fmt.Sprintf("```%s```", info.ConnectCode),
 						Inline: true,
 					},
+					Description: fmt.Sprintf(
+					"接続後オートミュートキャプチャーがフリーズする場合があります。/nその場合は再起動後、再度【登録】ボタンをおしてください。",
+				),
 				},
 			},
 		}
