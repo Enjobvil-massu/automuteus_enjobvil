@@ -6,5 +6,5 @@ import (
 
 var End = discordgo.ApplicationCommand{
 	Name:        "stop",
-	Description: "End a game",
+	Description: "オートミュートを停止します",
 }
