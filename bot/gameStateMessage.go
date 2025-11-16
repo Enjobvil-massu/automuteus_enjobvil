@@ -58,43 +58,44 @@ var DeferredEditsLock = sync.Mutex{}
 // ==== 色情報マスタ ====
 //  key: 英語の色名キーワード（label や value に含まれる文字）
 type colorInfo struct {
-	LabelJP string // ラベル（絵文字＋カタカナ）
-	Emoji   string // ボタンの Emoji.Name として送る Unicode 絵文字
+	JPName string // カタカナ名
+	Square string // 色イメージ用の四角絵文字
 }
 
 var colorInfoMap = []struct {
-	Key string
+	Key  string
 	Info colorInfo
 }{
-	{"red", colorInfo{LabelJP: "🟥 レッド", Emoji: "🟥"}},
-	{"black", colorInfo{LabelJP: "⬛ ブラック", Emoji: "⬛"}},
-	{"white", colorInfo{LabelJP: "⬜ ホワイト", Emoji: "⬜"}},
-	{"rose", colorInfo{LabelJP: "🌸 ローズ", Emoji: "🌸"}},
+	{"red", colorInfo{JPName: "レッド", Square: "🟥"}},
+	{"black", colorInfo{JPName: "ブラック", Square: "⬛"}},
+	{"white", colorInfo{JPName: "ホワイト", Square: "⬜"}},
+	{"rose", colorInfo{JPName: "ローズ", Square: "🌸"}},
 
-	{"blue", colorInfo{LabelJP: "🔵 ブルー", Emoji: "🔵"}},
-	{"cyan", colorInfo{LabelJP: "🟦 シアン", Emoji: "🟦"}},
-	{"yellow", colorInfo{LabelJP: "🟨 イエロー", Emoji: "🟨"}},
-	{"pink", colorInfo{LabelJP: "💗 ピンク", Emoji: "💗"}},
+	{"blue", colorInfo{JPName: "ブルー", Square: "🔵"}},
+	{"cyan", colorInfo{JPName: "シアン", Square: "🟦"}},
+	{"yellow", colorInfo{JPName: "イエロー", Square: "🟨"}},
+	{"pink", colorInfo{JPName: "ピンク", Square: "💗"}},
 
-	{"purple", colorInfo{LabelJP: "🟣 パープル", Emoji: "🟣"}},
-	{"orange", colorInfo{LabelJP: "🟧 オレンジ", Emoji: "🟧"}},
-	{"banana", colorInfo{LabelJP: "🍌 バナナ", Emoji: "🍌"}},
-	{"coral", colorInfo{LabelJP: "🧱 コーラル", Emoji: "🧱"}},
+	{"purple", colorInfo{JPName: "パープル", Square: "🟣"}},
+	{"orange", colorInfo{JPName: "オレンジ", Square: "🟧"}},
+	{"banana", colorInfo{JPName: "バナナ", Square: "🍌"}},
+	{"coral", colorInfo{JPName: "コーラル", Square: "🧱"}},
 
-	{"lime", colorInfo{LabelJP: "🥬 ライム", Emoji: "🥬"}},
-	{"green", colorInfo{LabelJP: "🌲 グリーン", Emoji: "🌲"}},
-	{"gray", colorInfo{LabelJP: "⬜ グレー", Emoji: "⬜"}},
-	{"maroon", colorInfo{LabelJP: "🍷 マルーン", Emoji: "🍷"}},
+	{"lime", colorInfo{JPName: "ライム", Square: "🥬"}},
+	{"green", colorInfo{JPName: "グリーン", Square: "🌲"}},
+	{"gray", colorInfo{JPName: "グレー", Square: "⬜"}},
+	{"maroon", colorInfo{JPName: "マルーン", Square: "🍷"}},
 
-	{"brown", colorInfo{LabelJP: "🤎 ブラウン", Emoji: "🤎"}},
-	{"tan", colorInfo{LabelJP: "🟫 タン", Emoji: "🟫"}},
+	{"brown", colorInfo{JPName: "ブラウン", Square: "🤎"}},
+	{"tan", colorInfo{JPName: "タン", Square: "🟫"}},
 }
 
-// 色ボタン用のラベル＆絵文字決定
-func buildColorButtonMeta(opt discordgo.SelectMenuOption) (label string, emojiName string) {
+// 色ボタン用のラベルと「クルー絵文字を使うかどうか」を決定
+func buildColorButtonMeta(opt discordgo.SelectMenuOption) (label string, useCrewEmoji bool) {
 	// ✖ はずす（X）用
 	if opt.Value == X || strings.EqualFold(opt.Label, X) {
-		return "✖ はずす", "✖"
+		// ラベルだけ。「✖ はずす」
+		return "✖ はずす", false
 	}
 
 	// label と value をまとめて小文字に
@@ -103,13 +104,13 @@ func buildColorButtonMeta(opt discordgo.SelectMenuOption) (label string, emojiNa
 	// 色名キーワードにマッチしたら、その情報を使う
 	for _, entry := range colorInfoMap {
 		if strings.Contains(lower, entry.Key) {
-			return entry.Info.LabelJP, entry.Info.Emoji
+			// ラベルは 「レッド 🟥」のようにカタカナ＋色イメージ
+			return fmt.Sprintf("%s %s", entry.Info.JPName, entry.Info.Square), true
 		}
 	}
 
-	// どれにもマッチしなかった場合のフォールバック
-	// → 絵文字はとりあえず白四角、ラベルは元のラベルのまま
-	return opt.Label, "⬜"
+	// どれにもマッチしなかった場合は元ラベルのまま & クルー絵文字は使う
+	return opt.Label, true
 }
 
 // Note this is not a pointer; we never expect the underlying DGS to change on an edit
@@ -180,15 +181,17 @@ func (dgs *GameState) CreateMessage(s *discordgo.Session, me *discordgo.MessageE
 	for idx, opt := range opts {
 		customID := fmt.Sprintf("%s:%s", colorSelectID, opt.Value)
 
-		label, emojiName := buildColorButtonMeta(opt)
+		label, useCrewEmoji := buildColorButtonMeta(opt)
 
 		btn := discordgo.Button{
 			CustomID: customID,
 			Label:    label,
 			Style:    discordgo.SecondaryButton,
-			Emoji: discordgo.ComponentEmoji{
-				Name: emojiName, // ← Unicode 絵文字だけを使用
-			},
+		}
+
+		// 通常色 → クルーの絵文字をアイコンとして使う
+		if useCrewEmoji {
+			btn.Emoji = opt.Emoji
 		}
 
 		curRow.Components = append(curRow.Components, btn)
