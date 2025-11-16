@@ -153,27 +153,31 @@ func (dgs *GameState) ToEmojiEmbedFields(emojis AlivenessEmojis, sett *settings.
 			Inline: false, // 1人ずつ改行表示
 		}
 
-		linked := false
-		for _, userData := range dgs.UserData {
-			if userData.InGameName == player.Name {
-				// リンク済みプレイヤー
-				discordMention := discord.MentionByUserID(userData.GetID())
+linked := false
+for _, userData := range dgs.UserData {
+    if userData.InGameName == player.Name {
+        // リンク済みプレイヤー
 
-				// フィールド名：アモアス名（@ディスコード名）
-				field.Name = fmt.Sprintf("%s（%s）", player.Name, discordMention)
+        // ★ メンションではなく、表示名の文字列だけを使う ★
+        displayName := discordDisplayNameFromUserData(userData)
 
-				// 本文：状態：<クルー絵文字> 生存/死亡　色：🟥 レッド
-				field.Value = fmt.Sprintf(
-					"状態：%s %s　色：%s",
-					emoji.FormatForInline(), // クルーの絵文字のみ（🟢 や 💀 は使わない）
-					statusText,
-					colorLabel,
-				)
+        // フィールド名：アモアス名（Discord表示名）
+        // 例）まっすー（お～とみゅ～と）
+        field.Name = fmt.Sprintf("%s（%s）", player.Name, displayName)
 
-				linked = true
-				break
-			}
-		}
+        // 本文：状態：<クルー絵文字> 生存/死亡　色：🟥 レッド
+        field.Value = fmt.Sprintf(
+            "状態：%s %s　色：%s",
+            emoji.FormatForInline(),
+            statusText,
+            colorLabel,
+        )
+
+        linked = true
+        break
+    }
+}
+
 
 		if !linked {
 			// 未リンクプレイヤー
