@@ -2,11 +2,13 @@ package bot
 
 import (
 	"fmt"
+	"log"
+	"strings"
+
 	"github.com/automuteus/automuteus/v8/pkg/amongus"
 	"github.com/automuteus/automuteus/v8/pkg/settings"
 	"github.com/bwmarrin/discordgo"
 	"github.com/nicksnyder/go-i18n/v2/i18n"
-	"log"
 )
 
 // GameState represents a full record of the entire current game's state. It is intended to be fully JSON-serializable,
@@ -73,7 +75,59 @@ func (dgs *GameState) checkCacheAndAddUser(g *discordgo.Guild, s *discordgo.Sess
 	return user, true
 }
 
+//
+// ===== ここからプレイヤー表示用の色ラベルヘルパー =====
+//
+
+// ボタンと同じ表記用の色マスタ
+type colorLabelPattern struct {
+	Key   string
+	Label string
+}
+
+var colorLabelPatterns = []colorLabelPattern{
+	{Key: "red", Label: "🟥 レッド"},
+	{Key: "black", Label: "⬛ ブラック"},
+	{Key: "white", Label: "⬜ ホワイト"},
+	{Key: "rose", Label: "🌸 ローズ"},
+
+	{Key: "blue", Label: "🔵 ブルー"},
+	{Key: "cyan", Label: "🟦 シアン"},
+	{Key: "yellow", Label: "🟨 イエロー"},
+	{Key: "pink", Label: "💗 ピンク"},
+
+	{Key: "purple", Label: "🟣 パープル"},
+	{Key: "orange", Label: "🟧 オレンジ"},
+	{Key: "banana", Label: "🍌 バナナ"},
+	{Key: "coral", Label: "🧱 コーラル"},
+
+	{Key: "lime", Label: "🥬 ライム"},
+	{Key: "green", Label: "🌲 グリーン"},
+	{Key: "gray", Label: "⬜ グレー"},
+	{Key: "maroon", Label: "🍷 マルーン"},
+
+	{Key: "brown", Label: "🤎 ブラウン"},
+	{Key: "tan", Label: "🟫 タン"},
+}
+
+// Emoji 名（例: "AliveRed", "DeadBlue" など）から「🟥 レッド」形式を返す
+func colorLabelFromEmojiName(name string) string {
+	lower := strings.ToLower(name)
+	for _, p := range colorLabelPatterns {
+		if strings.Contains(lower, p.Key) {
+			return p.Label
+		}
+	}
+	// マッチしなかったときのフォールバック
+	return "❓ 不明"
+}
+
+//
+// ===== ここから Embed のプレイヤー一覧生成 =====
+//
+
 func (dgs *GameState) ToEmojiEmbedFields(emojis AlivenessEmojis, sett *settings.GuildSettings) []*discordgo.MessageEmbedField {
+	// 色順で並べるための一時配列（最大 18 色）
 	unsorted := make([]*discordgo.MessageEmbedField, 18)
 	num := 0
 
@@ -81,47 +135,73 @@ func (dgs *GameState) ToEmojiEmbedFields(emojis AlivenessEmojis, sett *settings.
 		if player.Color < 0 || player.Color > 17 {
 			break
 		}
+
+		// 生存/死亡で別のクルー絵文字を取得
+		emoji := emojis[player.IsAlive][player.Color]
+
+		statusText := "🟢 生存"
+		if !player.IsAlive {
+			statusText = "💀 死亡"
+		}
+
+		// ボタンと同じ色表記（🟥 レッド など）
+		colorLabel := colorLabelFromEmojiName(emoji.Name)
+
+		field := &discordgo.MessageEmbedField{
+			Inline: false, // 1人ずつ改行表示
+		}
+
+		linked := false
 		for _, userData := range dgs.UserData {
 			if userData.InGameName == player.Name {
-				emoji := emojis[player.IsAlive][player.Color]
-				unsorted[player.Color] = &discordgo.MessageEmbedField{
-					Name:   player.Name,
-					Value:  fmt.Sprintf("%s <@!%s>", emoji.FormatForInline(), userData.GetID()),
-					Inline: true,
-				}
+				// リンク済みプレイヤー
+				discordMention := fmt.Sprintf("<@!%s>", userData.GetID())
+
+				// フィールド名：アモアス名（@ディスコード名）
+				field.Name = fmt.Sprintf("%s（%s）", player.Name, discordMention)
+
+				// 本文：状態：<クルー絵文字> 🟢生存 / 💀死亡　色：🟥 レッド
+				field.Value = fmt.Sprintf(
+					"状態：%s %s　色：%s",
+					emoji.FormatForInline(),
+					statusText,
+					colorLabel,
+				)
+
+				linked = true
 				break
 			}
 		}
-		// no player matched; unlinked player
-		if unsorted[player.Color] == nil {
-			emoji := emojis[player.IsAlive][player.Color]
-			unsorted[player.Color] = &discordgo.MessageEmbedField{
-				Name: player.Name,
-				Value: fmt.Sprintf("%s **%s**", emoji.FormatForInline(), sett.LocalizeMessage(&i18n.Message{
-					ID:    "discordGameState.ToEmojiEmbedFields.Unlinked",
-					Other: "Unlinked",
-				})),
-				Inline: true,
-			}
+
+		if !linked {
+			// 未リンクプレイヤー
+			unlinkedText := sett.LocalizeMessage(&i18n.Message{
+				ID:    "discordGameState.ToEmojiEmbedFields.Unlinked",
+				Other: "Unlinked",
+			})
+
+			field.Name = fmt.Sprintf("%s（%s）", player.Name, unlinkedText)
+			field.Value = fmt.Sprintf(
+				"状態：%s %s　色：%s",
+				emoji.FormatForInline(),
+				statusText,
+				colorLabel,
+			)
 		}
+
+		unsorted[player.Color] = field
 		num++
 	}
 
-	sorted := make([]*discordgo.MessageEmbedField, num)
-	num = 0
+	// 色順に並べ替え
+	sorted := make([]*discordgo.MessageEmbedField, 0, num)
 	for i := 0; i < 18; i++ {
 		if unsorted[i] != nil {
-			sorted[num] = unsorted[i]
-			num++
+			sorted = append(sorted, unsorted[i])
 		}
 	}
-	// balance out the last row of embeds with an extra inline field
-	if num%3 == 2 {
-		sorted = append(sorted, &discordgo.MessageEmbedField{
-			Name:   "\u200b",
-			Value:  "\u200b",
-			Inline: true,
-		})
-	}
+
+	// ※1人1ブロックで縦並びにするので、最後の行を埋めるパディングは不要
+
 	return sorted
 }
