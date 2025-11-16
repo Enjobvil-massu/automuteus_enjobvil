@@ -57,13 +57,8 @@ func NewResponse(status NewStatus, info NewInfo, sett *settings.GuildSettings) *
 			{
 				Title: "🍰 AmongUsCapture を接続してください",
 				Description: fmt.Sprintf(
-					"AmongUsCapture の🔌設定画面で、下記の値を入力してください。\n\n"+
-						"・**Host** → 下の「ホスト」をコピペ\n"+
-						"・**Code** → 下の「コード」をコピペ\n\n"+
-						"※ キャプチャ本体のダウンロードは <%s> から行えます。",
-					CaptureDownloadURL,
+					"AmongUsCapture の🔌設定画面で、下記の値を入力してください。\n\n",
 				),
-				Color: 0x00cc88,
 				Fields: []*discordgo.MessageEmbedField{
 					{
 						Name:   "ホスト",
