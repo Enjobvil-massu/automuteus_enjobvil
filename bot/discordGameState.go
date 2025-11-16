@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/automuteus/automuteus/v8/pkg/amongus"
+	"github.com/automuteus/automuteus/v8/pkg/discord"
 	"github.com/automuteus/automuteus/v8/pkg/settings"
 	"github.com/bwmarrin/discordgo"
 	"github.com/nicksnyder/go-i18n/v2/i18n"
@@ -139,6 +140,7 @@ func (dgs *GameState) ToEmojiEmbedFields(emojis AlivenessEmojis, sett *settings.
 		// 生存/死亡で別のクルー絵文字を取得
 		emoji := emojis[player.IsAlive][player.Color]
 
+		// 状態テキスト（生存 / 死亡）
 		statusText := "生存中"
 		if !player.IsAlive {
 			statusText = "死亡中"
@@ -155,15 +157,15 @@ func (dgs *GameState) ToEmojiEmbedFields(emojis AlivenessEmojis, sett *settings.
 		for _, userData := range dgs.UserData {
 			if userData.InGameName == player.Name {
 				// リンク済みプレイヤー
-				discordMention := fmt.Sprintf("<@!%s>", userData.GetID())
+				discordMention := discord.MentionByUserID(userData.GetID())
 
 				// フィールド名：アモアス名（@ディスコード名）
 				field.Name = fmt.Sprintf("%s（%s）", player.Name, discordMention)
 
-				// 本文：状態：<クルー絵文字> 🟢生存 / 💀死亡　色：🟥 レッド
+				// 本文：状態：<クルー絵文字> 生存/死亡　色：🟥 レッド
 				field.Value = fmt.Sprintf(
 					"状態：%s %s　色：%s",
-					emoji.FormatForInline(),
+					emoji.FormatForInline(), // クルーの絵文字のみ（🟢 や 💀 は使わない）
 					statusText,
 					colorLabel,
 				)
@@ -202,6 +204,5 @@ func (dgs *GameState) ToEmojiEmbedFields(emojis AlivenessEmojis, sett *settings.
 	}
 
 	// ※1人1ブロックで縦並びにするので、最後の行を埋めるパディングは不要
-
 	return sorted
 }
