@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/automuteus/automuteus/v8/pkg/amongus"
-	"github.com/automuteus/automuteus/v8/pkg/discord"
 	"github.com/automuteus/automuteus/v8/pkg/settings"
 	"github.com/bwmarrin/discordgo"
 	"github.com/nicksnyder/go-i18n/v2/i18n"
@@ -121,6 +120,30 @@ func colorLabelFromEmojiName(name string) string {
 	}
 	// マッチしなかったときのフォールバック
 	return "❓ 不明"
+}
+
+// UserData から「表示用のDiscord名」を取り出すヘルパー
+// - ギルドのニックネームがあればそれを優先
+// - なければユーザー名
+// - それもなければ ID をそのまま返す
+func discordDisplayNameFromUserData(u UserData) string {
+	// ★★ ここは userdata.go の定義に合わせてフィールド名を調整してください ★★
+	// たとえば userdata.go が:
+	//   type UserData struct {
+	//       ID       string
+	//       UserName string
+	//       Nick     string
+	//       ...
+	//   }
+	// という形なら、下のような感じになります。
+
+	if u.Nick != "" {        // ニックネームがあれば優先
+		return u.Nick
+	}
+	if u.UserName != "" {    // なければユーザー名
+		return u.UserName
+	}
+	return u.GetID()         // 最後の手段としてID
 }
 
 //
