@@ -112,50 +112,68 @@ func deferredEditWorker(s *discordgo.Session, channelID, messageID string) {
 // ===== ボタン式 色選択付き CreateMessage =====
 
 func (dgs *GameState) CreateMessage(s *discordgo.Session, me *discordgo.MessageEmbed, channelID string, authorID string) bool {
-    // もともとのセレクトメニューからオプション生成
-    // （Label は別ファイル側で「🟥 レッド」などに変更済み）
-    opts := EmojisToSelectMenuOptions(GlobalAlivenessEmojis[true], X)
+    // 色ボタン定義（Value / Label）
+    colors := []struct {
+        value string
+        label string
+    }{
+        {"red", "🟥 レッド"},
+        {"black", "⬛ ブラック"},
+        {"white", "⬜ ホワイト"},
+        {"rose", "🌸 ローズ"},
+
+        {"blue", "🔵 ブルー"},
+        {"cyan", "🟦 シアン"},
+        {"yellow", "🟨 イエロー"},
+        {"pink", "💗 ピンク"},
+
+        {"purple", "🟣 パープル"},
+        {"orange", "🟧 オレンジ"},
+        {"banana", "🍌 バナナ"},
+        {"coral", "🧱 コーラル"},
+
+        {"lime", "🥬 ライム"},
+        {"green", "🌲 グリーン"},
+        {"gray", "⬜ グレー"},
+        {"maroon", "🍷 マルーン"},
+
+        {"brown", "🤎 ブラウン"},
+        {"tan", "🟫 タン"},
+    }
 
     const maxPerRow = 5
     var components []discordgo.MessageComponent
     curRow := discordgo.ActionsRow{}
 
-    for idx, opt := range opts {
-        // CustomID は "select-color:red" のような形式
-        customID := fmt.Sprintf("%s:%s", colorSelectID, opt.Value)
+    // 色ボタン
+    for idx, c := range colors {
+        customID := fmt.Sprintf("%s:%s", colorSelectID, c.value)
 
         btn := discordgo.Button{
             CustomID: customID,
-            Label:    opt.Label,                 // 「🟥 レッド」など
+            Label:    c.label,                  // 「🟥 レッド」など
             Style:    discordgo.SecondaryButton,
-            // 絵文字は Label 側に含めているので Emoji フィールドは使わない
-            // Emoji: opt.Emoji,
+            // Emoji フィールドは一切使わない（ダブル表示＆INVALID_EMOJI対策）
         }
 
         curRow.Components = append(curRow.Components, btn)
 
-        // maxPerRow 個ごとに改行
         if (idx+1)%maxPerRow == 0 {
             components = append(components, curRow)
             curRow = discordgo.ActionsRow{}
         }
     }
-
-    // 余りがあれば最後の行として追加
     if len(curRow.Components) > 0 {
         components = append(components, curRow)
     }
 
-    // 一番下に「❌ unlink」ボタンを追加
+    // 一番下：解除ボタン（X と同じ扱いにする）
     unlinkRow := discordgo.ActionsRow{
         Components: []discordgo.MessageComponent{
             discordgo.Button{
-                CustomID: "color-unlink",
-                Label:    "unlink",
+                CustomID: fmt.Sprintf("%s:%s", colorSelectID, X), // "select-color:X"
+                Label:    "❌ unlink",
                 Style:    discordgo.DangerButton,
-                Emoji: discordgo.ComponentEmoji{
-                    Name: "❌",
-                },
             },
         },
     }
