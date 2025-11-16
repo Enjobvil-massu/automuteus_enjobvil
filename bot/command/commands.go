@@ -2,6 +2,7 @@ package command
 
 import (
 	"fmt"
+
 	"github.com/automuteus/automuteus/v8/pkg/discord"
 	"github.com/automuteus/automuteus/v8/pkg/game"
 	"github.com/automuteus/automuteus/v8/pkg/settings"
@@ -33,6 +34,42 @@ var All = []*discordgo.ApplicationCommand{
 	&Premium,
 	&Debug,
 	&Download,
+}
+
+// ===== スラッシュコマンド有効・無効設定 =====
+// true のものだけ Discord に登録されます。
+// 一時的に隠したいコマンドは false にするだけで OK（後で true に戻せます）。
+var EnabledSlashCommands = map[string]bool{
+	"help":     true,
+	"start":    true,
+	"refresh":  false,
+	"pause":    false,
+	"stop":     true,
+	"link":     true,
+	"unlink":   true,
+	"settings": true,
+	"privacy":  false,
+	"info":     false,
+	"map":      false,
+	// ↓ たぶん不要そうなものはデフォルトで off
+	"stats":    false,
+	"premium":  false,
+	"debug":    false,
+	"download": false,
+}
+
+// EnabledCommands は EnabledSlashCommands で true のコマンドだけを返します。
+// main.go 側から、Discord へ登録する際はこの関数の結果を使います。
+func EnabledCommands() []*discordgo.ApplicationCommand {
+	var list []*discordgo.ApplicationCommand
+
+	for _, cmd := range All {
+		if enabled, ok := EnabledSlashCommands[cmd.Name]; ok && enabled {
+			list = append(list, cmd)
+		}
+	}
+
+	return list
 }
 
 func DeadlockGameStateResponse(command string, sett *settings.GuildSettings) *discordgo.InteractionResponse {
