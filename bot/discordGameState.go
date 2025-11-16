@@ -122,30 +122,6 @@ func colorLabelFromEmojiName(name string) string {
 	return "❓ 不明"
 }
 
-// UserData から「表示用のDiscord名」を取り出すヘルパー
-// - ギルドのニックネームがあればそれを優先
-// - なければユーザー名
-// - それもなければ ID をそのまま返す
-func discordDisplayNameFromUserData(u UserData) string {
-	// ★★ ここは userdata.go の定義に合わせてフィールド名を調整してください ★★
-	// たとえば userdata.go が:
-	//   type UserData struct {
-	//       ID       string
-	//       UserName string
-	//       Nick     string
-	//       ...
-	//   }
-	// という形なら、下のような感じになります。
-
-	if u.Nick != "" {        // ニックネームがあれば優先
-		return u.Nick
-	}
-	if u.UserName != "" {    // なければユーザー名
-		return u.UserName
-	}
-	return u.GetID()         // 最後の手段としてID
-}
-
 //
 // ===== ここから Embed のプレイヤー一覧生成 =====
 //
@@ -176,34 +152,35 @@ func (dgs *GameState) ToEmojiEmbedFields(emojis AlivenessEmojis, sett *settings.
 			Inline: false, // 1人ずつ改行表示
 		}
 
-linked := false
-for _, userData := range dgs.UserData {
-    if userData.InGameName == player.Name {
-        // リンク済みプレイヤー
+		linked := false
+		for _, userData := range dgs.UserData {
+			if userData.InGameName == player.Name {
+				// ===== リンク済みプレイヤー =====
 
-        // ★ メンションではなく、表示名の文字列だけを使う ★
-        displayName := discordDisplayNameFromUserData(userData)
+				// ディスコード側の表示名（ニックネーム優先、なければユーザー名）
+				discordName := userData.GetNickName()
+				if discordName == "" {
+					discordName = userData.GetUserName()
+				}
 
-        // フィールド名：アモアス名（Discord表示名）
-        // 例）まっすー（お～とみゅ～と）
-        field.Name = fmt.Sprintf("%s（%s）", player.Name, displayName)
+				// フィールド名：アモアス名（ディスコード表示名）
+				field.Name = fmt.Sprintf("%s（%s）", player.Name, discordName)
 
-        // 本文：状態：<クルー絵文字> 生存/死亡　色：🟥 レッド
-        field.Value = fmt.Sprintf(
-            "状態：%s %s　色：%s",
-            emoji.FormatForInline(),
-            statusText,
-            colorLabel,
-        )
+				// 本文：状態：<クルー絵文字> 生存/死亡　色：🟥 レッド
+				field.Value = fmt.Sprintf(
+					"状態：%s %s　色：%s",
+					emoji.FormatForInline(), // クルーの絵文字のみ
+					statusText,
+					colorLabel,
+				)
 
-        linked = true
-        break
-    }
-}
-
+				linked = true
+				break
+			}
+		}
 
 		if !linked {
-			// 未リンクプレイヤー
+			// ===== 未リンクプレイヤー =====
 			unlinkedText := sett.LocalizeMessage(&i18n.Message{
 				ID:    "discordGameState.ToEmojiEmbedFields.Unlinked",
 				Other: "Unlinked",
@@ -230,6 +207,6 @@ for _, userData := range dgs.UserData {
 		}
 	}
 
-	// ※1人1ブロックで縦並びにするので、最後の行を埋めるパディングは不要
+	// 1人1ブロックで縦並びにするので、パディングは不要
 	return sorted
 }
