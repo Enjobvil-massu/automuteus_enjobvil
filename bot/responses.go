@@ -218,7 +218,7 @@ func lobbyMessage(dgs *GameState, emojis AlivenessEmojis, sett *settings.GuildSe
 		Description: desc,
 		Timestamp:   time.Now().Format(ISO8601),
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: "自動リンクされてない方は下のボタンから自分の色を選択してください/n（✖ でリンク解除）/n",
+			Text: "自動リンクされてない方は下のボタンから自分の色を選択してください（✖ でリンク解除）",
 		},
 		Color:     color,
 		Image:     nil,
