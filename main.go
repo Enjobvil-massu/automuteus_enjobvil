@@ -4,13 +4,6 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"github.com/automuteus/automuteus/v8/bot/command"
-	"github.com/automuteus/automuteus/v8/bot/tokenprovider"
-	"github.com/automuteus/automuteus/v8/internal/server"
-	"github.com/automuteus/automuteus/v8/pkg/capture"
-	"github.com/automuteus/automuteus/v8/pkg/locale"
-	storage2 "github.com/automuteus/automuteus/v8/pkg/storage"
-	"github.com/bwmarrin/discordgo"
 	"io"
 	"log"
 	"math/rand"
@@ -22,9 +15,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/automuteus/automuteus/v8/storage"
-
 	"github.com/automuteus/automuteus/v8/bot"
+	"github.com/automuteus/automuteus/v8/bot/command"
+	"github.com/automuteus/automuteus/v8/bot/tokenprovider"
+	"github.com/automuteus/automuteus/v8/internal/server"
+	"github.com/automuteus/automuteus/v8/pkg/capture"
+	"github.com/automuteus/automuteus/v8/pkg/locale"
+	storage2 "github.com/automuteus/automuteus/v8/pkg/storage"
+	"github.com/automuteus/automuteus/v8/storage"
+	"github.com/bwmarrin/discordgo"
 )
 
 var (
@@ -47,13 +46,14 @@ type registeredCommand struct {
 }
 
 // ===== スラッシュコマンド有効・無効設定 =====
-// true のものだけ Discord に登録されます。
-// いらないコマンドは false にするか、このマップから消してください。
+// true = 有効（表示する）
+// false = 無効（完全に削除する）
+// コマンド名はログの「Registering command X」の X を書きます。
 var EnabledSlashCommands = map[string]bool{
 	"help":    true,
-	"start":   true,
-	"refresh": false,
-	"pause":   false,
+	"new":     true,  // 開始コマンド（/new）
+	"refresh": false, // 今回は使わない
+	"pause":   false, // 今回は使わない
 	"stop":    true,
 	"link":    true,
 	"unlink":  true,
@@ -68,7 +68,13 @@ var EnabledSlashCommands = map[string]bool{
 	"download": false,
 }
 
-// ===== ここまで スラッシュコマンド有効・無効設定 =====
+// マップに載っていないコマンド名は「デフォルトで true（有効）」扱いにします。
+func isSlashCommandEnabled(name string) bool {
+	if enabled, ok := EnabledSlashCommands[name]; ok {
+		return enabled
+	}
+	return true
+}
 
 func main() {
 	// seed the rand generator (used for making connection codes)
@@ -163,6 +169,7 @@ func discordMainWrapper() error {
 		return errors.New("no REDIS_ADDR specified; exiting")
 	}
 
+	// BOT_LANG / LOCALE_PATH を環境変数から読む
 	locale.InitLang(os.Getenv("LOCALE_PATH"), os.Getenv("BOT_LANG"))
 
 	psql := storage2.PsqlInterface{}
@@ -258,46 +265,70 @@ func discordMainWrapper() error {
 	// only register commands if we're not the official bot, OR we're the primary/main shard
 	var registeredCommands []registeredCommand
 	if !isOfficial || shards.isPrimaryShard() {
-
-		// ここで「有効なコマンドだけ」を取得
-		enabledCmds := command.EnabledCommands()
-
 		for _, guild := range slashCommandGuildIds {
 
-			if guild == "" {
-				log.Printf("Overwriting GLOBAL slash commands (%d enabled)\n", len(enabledCmds))
-			} else {
-				log.Printf("Overwriting slash commands in guild %s (%d enabled)\n", guild, len(enabledCmds))
-			}
-
-			// BulkOverwrite で、そのギルドのコマンド一覧を「enabledCmds だけ」に完全上書き
-			cmds, err := bots[0].PrimarySession.ApplicationCommandBulkOverwrite(
+			// --- (1) 既存のコマンドを取得して「無効化したいもの」を削除 ---
+			existing, err := bots[0].PrimarySession.ApplicationCommands(
 				bots[0].PrimarySession.State.User.ID,
 				guild,
-				enabledCmds,
 			)
 			if err != nil {
-				log.Panicf("Cannot bulk overwrite commands: %v", err)
+				log.Printf("Cannot fetch existing commands for guild '%s': %v", guild, err)
+			} else {
+				for _, c := range existing {
+					if !isSlashCommandEnabled(c.Name) {
+						err := bots[0].PrimarySession.ApplicationCommandDelete(
+							c.ApplicationID,
+							guild,
+							c.ID,
+						)
+						if err != nil {
+							log.Printf("Failed to delete disabled command %s in guild '%s': %v", c.Name, guild, err)
+						} else {
+							if guild == "" {
+								log.Printf("Deleted disabled command %s GLOBALLY\n", c.Name)
+							} else {
+								log.Printf("Deleted disabled command %s in guild %s\n", c.Name, guild)
+							}
+						}
+					}
+				}
 			}
 
-			// 後で削除する用に控えを作っておく（元のロジックを踏襲）
-			for _, c := range cmds {
-				registeredCommands = append(registeredCommands, registeredCommand{
-					GuildID:            guild,
-					ApplicationCommand: c,
-				})
+			// --- (2) Enabled なコマンドだけ登録 ---
+			for _, v := range command.All {
+				if !isSlashCommandEnabled(v.Name) {
+					if guild == "" {
+						log.Printf("Skip disabled command %s GLOBALLY\n", v.Name)
+					} else {
+						log.Printf("Skip disabled command %s in guild %s\n", v.Name, guild)
+					}
+					continue
+				}
 
 				if guild == "" {
-					log.Printf("Registered command %s GLOBALLY\n", c.Name)
+					log.Printf("Registering command %s GLOBALLY\n", v.Name)
 				} else {
-					log.Printf("Registered command %s in guild %s\n", c.Name, guild)
+					log.Printf("Registering command %s in guild %s\n", v.Name, guild)
+				}
+
+				id, err := bots[0].PrimarySession.ApplicationCommandCreate(
+					bots[0].PrimarySession.State.User.ID,
+					guild,
+					v,
+				)
+				if err != nil {
+					log.Panicf("Cannot create command: %v", err)
+				} else {
+					registeredCommands = append(registeredCommands, registeredCommand{
+						GuildID:            guild,
+						ApplicationCommand: id,
+					})
 				}
 			}
 		}
-
 		log.Println("Finishing registering all commands!")
 	}
-
 
 	<-sc
 	log.Printf("Received Sigterm or Kill signal. Bot will terminate in 1 second")
