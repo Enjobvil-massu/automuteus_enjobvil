@@ -117,7 +117,7 @@ func MakeAndStartBot(version, commit, botToken, topGGToken, url, emojiGuildID st
 
 	listeningTo := os.Getenv("AUTOMUTEUS_LISTENING")
 	if listeningTo == "" {
-		listeningTo = "エンジョブ村オリジナルオートミュートBOT"
+		listeningTo = "エンジョブ村オリジナルBOT"
 	}
 
 	// pretty sure this needs to happen per-shard
