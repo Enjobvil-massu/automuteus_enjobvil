@@ -55,32 +55,61 @@ func (dgs *GameState) DeleteGameStateMsg(s *discordgo.Session, reset bool) bool 
 var DeferredEdits = make(map[string]*discordgo.MessageEmbed)
 var DeferredEditsLock = sync.Mutex{}
 
-// ==== 色名 → 絵文字＋カタカナ マップ ====
-//
-//  値はボタンの Label にそのまま使います。
-//  opt.Value / opt.Label のどちらかがキーにマッチすれば適用されます。
-var colorLabelJP = map[string]string{
-	"red":    "🟥 レッド",
-	"black":  "⬛ ブラック",
-	"white":  "⬜ ホワイト",
-	"rose":   "🌸 ローズ",
-	"blue":   "🔵 ブルー",
-	"cyan":   "🟦 シアン",
-	"yellow": "🟨 イエロー",
-	"pink":   "💗 ピンク",
+// ==== 色情報マスタ ====
+//  key: 英語の色名キーワード（label や value に含まれる文字）
+type colorInfo struct {
+	LabelJP string // ラベル（絵文字＋カタカナ）
+	Emoji   string // ボタンの Emoji.Name として送る Unicode 絵文字
+}
 
-	"purple": "🟣 パープル",
-	"orange": "🟧 オレンジ",
-	"banana": "🍌 バナナ",
-	"coral":  "🧱 コーラル",
+var colorInfoMap = []struct {
+	Key string
+	Info colorInfo
+}{
+	{"red", colorInfo{LabelJP: "🟥 レッド", Emoji: "🟥"}},
+	{"black", colorInfo{LabelJP: "⬛ ブラック", Emoji: "⬛"}},
+	{"white", colorInfo{LabelJP: "⬜ ホワイト", Emoji: "⬜"}},
+	{"rose", colorInfo{LabelJP: "🌸 ローズ", Emoji: "🌸"}},
 
-	"lime":   "🥬 ライム",
-	"green":  "🌲 グリーン",
-	"gray":   "⬜ グレー",
-	"maroon": "🍷 マルーン",
+	{"blue", colorInfo{LabelJP: "🔵 ブルー", Emoji: "🔵"}},
+	{"cyan", colorInfo{LabelJP: "🟦 シアン", Emoji: "🟦"}},
+	{"yellow", colorInfo{LabelJP: "🟨 イエロー", Emoji: "🟨"}},
+	{"pink", colorInfo{LabelJP: "💗 ピンク", Emoji: "💗"}},
 
-	"brown": "🤎 ブラウン",
-	"tan":   "🟫 タン",
+	{"purple", colorInfo{LabelJP: "🟣 パープル", Emoji: "🟣"}},
+	{"orange", colorInfo{LabelJP: "🟧 オレンジ", Emoji: "🟧"}},
+	{"banana", colorInfo{LabelJP: "🍌 バナナ", Emoji: "🍌"}},
+	{"coral", colorInfo{LabelJP: "🧱 コーラル", Emoji: "🧱"}},
+
+	{"lime", colorInfo{LabelJP: "🥬 ライム", Emoji: "🥬"}},
+	{"green", colorInfo{LabelJP: "🌲 グリーン", Emoji: "🌲"}},
+	{"gray", colorInfo{LabelJP: "⬜ グレー", Emoji: "⬜"}},
+	{"maroon", colorInfo{LabelJP: "🍷 マルーン", Emoji: "🍷"}},
+
+	{"brown", colorInfo{LabelJP: "🤎 ブラウン", Emoji: "🤎"}},
+	{"tan", colorInfo{LabelJP: "🟫 タン", Emoji: "🟫"}},
+}
+
+// 色ボタン用のラベル＆絵文字決定
+func buildColorButtonMeta(opt discordgo.SelectMenuOption) (label string, emojiName string) {
+	// ✖ はずす（X）用
+	if opt.Value == X || strings.EqualFold(opt.Label, X) {
+		return "✖ はずす", "✖"
+	}
+
+	// label と value をまとめて小文字に
+	lower := strings.ToLower(opt.Label + " " + opt.Value)
+
+	// 色名キーワードにマッチしたら、その情報を使う
+	for _, entry := range colorInfoMap {
+		if strings.Contains(lower, entry.Key) {
+			return entry.Info.LabelJP, entry.Info.Emoji
+		}
+	}
+
+	// どれにもマッチしなかった場合のフォールバック
+	// → 絵文字はとりあえず白四角、ラベルは元のラベルのまま
+	return opt.Label, "⬜"
 }
 
 // Note this is not a pointer; we never expect the underlying DGS to change on an edit
@@ -138,38 +167,10 @@ func deferredEditWorker(s *discordgo.Session, channelID, messageID string) {
 	}
 }
 
-// ==== ボタンラベル生成 ====
-
-func buildColorButtonLabel(opt discordgo.SelectMenuOption) string {
-	// ✖ 外すボタン
-	if opt.Value == X || strings.EqualFold(opt.Label, X) {
-		return "✖ はずす"
-	}
-
-	// まず Value を見てみる
-	key := strings.ToLower(opt.Value)
-	if lbl, ok := colorLabelJP[key]; ok {
-		return lbl
-	}
-
-	// Value でヒットしなければ Label も見てみる
-	key = strings.ToLower(opt.Label)
-	// "Red Crewmate" みたいなパターンは先頭語だけ見る
-	if strings.Contains(key, " ") {
-		key = strings.SplitN(key, " ", 2)[0]
-	}
-	if lbl, ok := colorLabelJP[key]; ok {
-		return lbl
-	}
-
-	// ここまで何もヒットしなければ元ラベルのまま
-	return opt.Label
-}
-
 // ===== ここからボタン式 色選択付きの CreateMessage =====
 
 func (dgs *GameState) CreateMessage(s *discordgo.Session, me *discordgo.MessageEmbed, channelID string, authorID string) bool {
-	// もともとのセレクトメニュー用関数からオプションを生成
+	// 元々のセレクトメニュー用オプションを流用
 	opts := EmojisToSelectMenuOptions(GlobalAlivenessEmojis[true], X)
 
 	const maxPerRow = 5
@@ -179,11 +180,15 @@ func (dgs *GameState) CreateMessage(s *discordgo.Session, me *discordgo.MessageE
 	for idx, opt := range opts {
 		customID := fmt.Sprintf("%s:%s", colorSelectID, opt.Value)
 
+		label, emojiName := buildColorButtonMeta(opt)
+
 		btn := discordgo.Button{
 			CustomID: customID,
-			// Emoji は設定しない（ここに入れると 400 INVALID_EMOJI になるため）
-			Label: buildColorButtonLabel(opt),
-			Style: discordgo.SecondaryButton,
+			Label:    label,
+			Style:    discordgo.SecondaryButton,
+			Emoji: discordgo.ComponentEmoji{
+				Name: emojiName, // ← Unicode 絵文字だけを使用
+			},
 		}
 
 		curRow.Components = append(curRow.Components, btn)
