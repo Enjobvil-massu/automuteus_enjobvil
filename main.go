@@ -46,6 +46,30 @@ type registeredCommand struct {
 	ApplicationCommand *discordgo.ApplicationCommand
 }
 
+// ===== スラッシュコマンド有効・無効設定 =====
+// true のものだけ Discord に登録されます。
+// いらないコマンドは false にするか、このマップから消してください。
+var EnabledSlashCommands = map[string]bool{
+	"help":    true,
+	"start":   true,
+	"refresh": false,
+	"pause":   false,
+	"stop":    true,
+	"link":    true,
+	"unlink":  true,
+	"settings": true,
+	"privacy":  false,
+	"info":     false,
+	"map":      false,
+	// ↓ たぶん不要そうなものはデフォルトで off
+	"stats":    false,
+	"premium":  false,
+	"debug":    false,
+	"download": false,
+}
+
+// ===== ここまで スラッシュコマンド有効・無効設定 =====
+
 func main() {
 	// seed the rand generator (used for making connection codes)
 	rand.Seed(time.Now().Unix())
@@ -236,6 +260,13 @@ func discordMainWrapper() error {
 	if !isOfficial || shards.isPrimaryShard() {
 		for _, guild := range slashCommandGuildIds {
 			for _, v := range command.All {
+
+				// ★ ここで有効／無効を判定する
+				if ok, exists := EnabledSlashCommands[v.Name]; !exists || !ok {
+					log.Printf("Skipping command %s (disabled)\n", v.Name)
+					continue
+				}
+
 				if guild == "" {
 					log.Printf("Registering command %s GLOBALLY\n", v.Name)
 				} else {
