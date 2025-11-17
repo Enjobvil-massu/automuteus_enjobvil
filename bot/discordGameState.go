@@ -53,24 +53,59 @@ func (dgs *GameState) Reset() {
 	dgs.GameData = amongus.NewGameData()
 }
 
+// ===== メンバーの「表示名」（VCに近い名前）を決めるヘルパー =====
+//
+//   1. サーバーニックネーム（設定されていればこれ）
+//   2. なければユーザー名（@ の後ろの名前）
+func memberDisplayName(m *discordgo.Member) string {
+	if m == nil || m.User == nil {
+		return ""
+	}
+
+	// ギルドごとのニックネームがあればそれを優先
+	if m.Nick != "" {
+		return m.Nick
+	}
+
+	// それ以外は通常のユーザー名
+	if m.User.Username != "" {
+		return m.User.Username
+	}
+
+	// 一応のフォールバック
+	return m.User.ID
+}
+
+// ===== ユーザーキャッシュへの登録 =====
+//
+// VC にいるメンバーなどを見つけた時に、UserDataSet に追加する処理。
+// 「表示名」を 2番目の引数（nick）として保存しておくことで、あとで GetNickName() から取れるようにしている。
 func (dgs *GameState) checkCacheAndAddUser(g *discordgo.Guild, s *discordgo.Session, userID string) (UserData, bool) {
 	if g == nil {
 		return UserData{}, false
 	}
-	// check and see if they're cached first
+
+	// まず Guild のメンバーキャッシュから探す
 	for _, v := range g.Members {
 		if v.User != nil && v.User.ID == userID {
-			user := MakeUserDataFromDiscordUser(v.User, v.Nick)
+			displayName := memberDisplayName(v)
+
+			user := MakeUserDataFromDiscordUser(v.User, displayName)
 			dgs.UserData[v.User.ID] = user
 			return user, true
 		}
 	}
+
+	// キャッシュにいなければ API から取得
 	mem, err := s.GuildMember(g.ID, userID)
 	if err != nil {
 		log.Println(err)
 		return UserData{}, false
 	}
-	user := MakeUserDataFromDiscordUser(mem.User, mem.Nick)
+
+	displayName := memberDisplayName(mem)
+
+	user := MakeUserDataFromDiscordUser(mem.User, displayName)
 	dgs.UserData[mem.User.ID] = user
 	return user, true
 }
@@ -157,13 +192,15 @@ func (dgs *GameState) ToEmojiEmbedFields(emojis AlivenessEmojis, sett *settings.
 			if userData.InGameName == player.Name {
 				// ===== リンク済みプレイヤー =====
 
-				// ディスコード側の表示名（ニックネーム優先、なければユーザー名）
+				// checkCacheAndAddUser で「表示名」を Nick に入れているので、
+				// Nick を最優先で使う。なければ UserName を使う。
 				discordName := userData.GetNickName()
 				if discordName == "" {
 					discordName = userData.GetUserName()
 				}
 
-				// フィールド名：アモアス名（ディスコード表示名）
+				// フィールド名：アモアス名（Discord表示名）
+				// 例）まっすー（彡まっすー彡）
 				field.Name = fmt.Sprintf("%s（%s）", player.Name, discordName)
 
 				// 本文：状態：<クルー絵文字> 生存/死亡　色：🟥 レッド
