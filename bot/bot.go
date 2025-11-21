@@ -115,11 +115,14 @@ func MakeAndStartBot(version, commit, botToken, topGGToken, url, emojiGuildID st
 
 	log.Println("Finished identifying to the Discord API. Now ready for incoming events")
 
-	playingTo := os.Getenv("AUTOMUTEUS_LISTENING")
-	if playingTo == "" {
-		playingTo = "エンジョブ村オリジナルBOT"
+	playingText := os.Getenv("AUTOMUTEUS_LISTENING")
+	if playingText == "" {
+		playingText = "エンジョブ村オリジナルBOT"
 	}
-
+    if err := dg.UpdateGameStatus(0, playingText); err != nil {
+    log.Printf("failed to set playing status: %v", err)
+    }
+	
 	// pretty sure this needs to happen per-shard
 	status := &discordgo.UpdateStatusData{
 		IdleSince: nil,
