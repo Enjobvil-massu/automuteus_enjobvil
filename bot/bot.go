@@ -115,9 +115,9 @@ func MakeAndStartBot(version, commit, botToken, topGGToken, url, emojiGuildID st
 
 	log.Println("Finished identifying to the Discord API. Now ready for incoming events")
 
-	listeningTo := os.Getenv("AUTOMUTEUS_LISTENING")
-	if listeningTo == "" {
-		listeningTo = "エンジョブ村オリジナルBOT"
+	playingTo := os.Getenv("AUTOMUTEUS_LISTENING")
+	if playingTo == "" {
+		playingTo = "エンジョブ村オリジナルBOT"
 	}
 
 	// pretty sure this needs to happen per-shard
