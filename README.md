@@ -86,10 +86,10 @@ If you want to view command usage or see the available options, type `/help` in 
 | Command     | Description                                                                                                            | Example                  |
 |-------------|------------------------------------------------------------------------------------------------------------------------|--------------------------|
 | `/help`     | Print help info and command usage                                                                                      |                          |
-| `/new`      | Start a new game in the current text channel                                                                           |                          |
+| `/start`    | Start a new game in the current text channel                                                                           |                          |
 | `/refresh`  | Remake the bot's status message entirely, in case it ends up too far up in the chat.                                   |                          |
 | `/pause`    | Pause the bot, and don't let it automute anyone until unpaused.                                                        |                          |
-| `/end`      | End the game entirely, and stop tracking players. Unmutes all and resets state                                         |                          |
+| `/stop`     | End the game entirely, and stop tracking players. Unmutes all and resets state                                         |                          |
 | `/link`     | Manually link a discord user to their in-game color                                                                    | `/link @Soup cyan`       |
 | `/unlink`   | Manually unlink a player                                                                                               | `/unlink @Soup`          |
 | `/settings` | View and change settings for the bot, such as the command prefix or mute behavior                                      |                          |
