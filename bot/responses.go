@@ -133,7 +133,7 @@ func lobbyMetaEmbedFields(room, region string, author, voiceChannelID string, pl
 		linkedPlayers = playerCount
 	}
 	gameInfoFields = append(gameInfoFields, &discordgo.MessageEmbedField{
-		Name:   "リンク済メンバー",
+		Name:   "リンク済人数／参加人数",
 		Value:  fmt.Sprintf("%v/%v", linkedPlayers, playerCount),
 		Inline: false,
 	})
