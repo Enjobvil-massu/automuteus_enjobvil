@@ -796,6 +796,9 @@ func (bot *Bot) slashCommandHandler(s *discordgo.Session, i *discordgo.Interacti
 
             selectCustomID := fmt.Sprintf("%s:%s", linkUserSelectPrefix, starterID)
 
+            // ★★★ 修正ポイント: MinValues は *int なので変数を用意して & を渡す ★★★
+            min := 1
+
             components := []discordgo.MessageComponent{
                 discordgo.ActionsRow{
                     Components: []discordgo.MessageComponent{
@@ -803,7 +806,7 @@ func (bot *Bot) slashCommandHandler(s *discordgo.Session, i *discordgo.Interacti
                             CustomID:    selectCustomID,
                             Options:     options,
                             Placeholder: "リンクするプレイヤーを選択してください",
-                            MinValues:   1,
+                            MinValues:   &min,
                             MaxValues:   1,
                         },
                     },
